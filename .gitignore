@@ -1,0 +1,28 @@
+# === Arquivos de Dados do Projeto ===
+dados_tickets.json
+dados_tickets.xlsx
+*.json
+*.xlsx
+*.csv
+
+# === Ambientes Virtuais e Dependências ===
+.venv/
+venv/
+env/
+ENV/
+bin/
+lib/
+include/
+
+# === Cache do Python ===
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# === Configurações do VS Code / IDEs ===
+.vscode/
+.idea/
+*.swp
+.DS_Store
