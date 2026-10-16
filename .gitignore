@@ -1,11 +1,16 @@
-# === Arquivos de Dados do Projeto ===
+# Dados coletados
 dados_tickets.json
 dados_tickets.xlsx
 *.json
 *.xlsx
 *.csv
 
-# === Ambientes Virtuais e Dependências ===
+# Segredos locais
+.env
+.env.*
+!.env.example
+
+# Ambientes virtuais e dependências
 .venv/
 venv/
 env/
@@ -14,14 +19,13 @@ bin/
 lib/
 include/
 
-# === Cache do Python ===
+# Cache e depuração do Python/Playwright
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
 .pytest_cache/
+debug_pagina.png
 
-# === Configurações do VS Code / IDEs ===
+# Configurações de editor e sistema
 .vscode/
 .idea/
 *.swp
