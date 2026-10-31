@@ -1,43 +1,43 @@
 import json
 
-from config import ARQUIVO_DADOS
+from config import ARQUIVO_TICKETS
 
 
-def carregar():
-    if not ARQUIVO_DADOS.exists():
+def carregar_tickets():
+    if not ARQUIVO_TICKETS.exists():
         return []
 
     try:
-        dados = json.loads(ARQUIVO_DADOS.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
+        lista_tickets = json.loads(ARQUIVO_TICKETS.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as erro:
         raise RuntimeError(
-            f"O arquivo {ARQUIVO_DADOS} contém JSON inválido. "
+            f"O arquivo {ARQUIVO_TICKETS} contém JSON inválido. "
             "Faça uma cópia e corrija/recupere o arquivo antes de continuar."
-        ) from exc
+        ) from erro
 
-    if not isinstance(dados, list):
-        raise ValueError(f"{ARQUIVO_DADOS} precisa conter uma lista JSON.")
+    if not isinstance(lista_tickets, list):
+        raise ValueError(f"{ARQUIVO_TICKETS} precisa conter uma lista JSON.")
 
-    por_id = {}
-    sem_id = []
+    tickets_por_id = {}
+    tickets_sem_id = []
 
-    for item in dados:
-        if not isinstance(item, dict):
+    for registro_ticket in lista_tickets:
+        if not isinstance(registro_ticket, dict):
             continue
-        ticket_id = str(item.get("ticket_id", "")).strip()
+        ticket_id = str(registro_ticket.get("ticket_id", "")).strip()
         if ticket_id:
-            item["ticket_id"] = ticket_id
-            por_id[ticket_id] = item
+            registro_ticket["ticket_id"] = ticket_id
+            tickets_por_id[ticket_id] = registro_ticket
         else:
-            sem_id.append(item)
+            tickets_sem_id.append(registro_ticket)
 
-    return list(por_id.values()) + sem_id
+    return list(tickets_por_id.values()) + tickets_sem_id
 
 
-def salvar(dados):
-    ARQUIVO_DADOS.parent.mkdir(parents=True, exist_ok=True)
-    temporario = ARQUIVO_DADOS.with_suffix(".tmp")
-    conteudo = json.dumps(dados, ensure_ascii=False, indent=2)
+def salvar_tickets(lista_tickets):
+    ARQUIVO_TICKETS.parent.mkdir(parents=True, exist_ok=True)
+    arquivo_temporario = ARQUIVO_TICKETS.with_suffix(".tmp")
+    conteudo_json = json.dumps(lista_tickets, ensure_ascii=False, indent=2)
 
-    temporario.write_text(conteudo, encoding="utf-8")
-    temporario.replace(ARQUIVO_DADOS)
+    arquivo_temporario.write_text(conteudo_json, encoding="utf-8")
+    arquivo_temporario.replace(ARQUIVO_TICKETS)

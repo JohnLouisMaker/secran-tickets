@@ -2,28 +2,28 @@ import os
 import time
 from urllib.parse import urlsplit
 
-from config import LISTA_URL, TIMEOUT, TIMEOUT_LOGIN
+from config import TEMPO_LIMITE_LOGIN_MS, TEMPO_LIMITE_MS, URL_LISTAGEM_TICKETS
 
 
-def _primeiro_visivel(page, seletores):
-    primeiro_existente = None
-    for seletor in seletores:
-        elementos = page.locator(seletor)
-        if not elementos.count():
+def _primeiro_elemento_visivel(pagina, seletores_css):
+    primeiro_elemento_existente = None
+    for seletor_css in seletores_css:
+        elementos_encontrados = pagina.locator(seletor_css)
+        if not elementos_encontrados.count():
             continue
-        elemento = elementos.first
-        if primeiro_existente is None:
-            primeiro_existente = elemento
+        elemento_encontrado = elementos_encontrados.first
+        if primeiro_elemento_existente is None:
+            primeiro_elemento_existente = elemento_encontrado
         try:
-            if elemento.is_visible():
-                return elemento
+            if elemento_encontrado.is_visible():
+                return elemento_encontrado
         except Exception:
             continue
-    return primeiro_existente
+    return primeiro_elemento_existente
 
 
-def _localizar_formulario_login(page):
-    seletores_email = (
+def _localizar_formulario_acesso(pagina):
+    seletores_campo_email = (
         "#login_email",
         "input[placeholder='Email' i]",
         "input[type='email']",
@@ -32,7 +32,7 @@ def _localizar_formulario_login(page):
         "input[autocomplete='username']",
         "input[type='text']:visible",
     )
-    seletores_senha = (
+    seletores_campo_senha = (
         "#login_password",
         "input[placeholder='Senha' i]",
         "input[type='password']",
@@ -40,122 +40,126 @@ def _localizar_formulario_login(page):
         "input[id*='password' i]",
     )
 
-    for frame in page.frames:
-        senha = _primeiro_visivel(frame, seletores_senha)
-        email = _primeiro_visivel(frame, seletores_email)
-        if senha and not email:
-            email = _primeiro_visivel(
-                frame,
+    for quadro in pagina.frames:
+        campo_senha_encontrado = _primeiro_elemento_visivel(quadro, seletores_campo_senha)
+        campo_email_encontrado = _primeiro_elemento_visivel(quadro, seletores_campo_email)
+        if campo_senha_encontrado and not campo_email_encontrado:
+            campo_email_encontrado = _primeiro_elemento_visivel(
+                quadro,
                 ("input[name*='user' i]", "input[id*='user' i]", "input[type='text']:visible"),
             )
-        if email and senha:
-            return frame, email, senha
+        if campo_email_encontrado and campo_senha_encontrado:
+            return quadro, campo_email_encontrado, campo_senha_encontrado
 
     return None, None, None
 
 
-def _diagnostico(page):
-    if page.is_closed():
+def _diagnostico_pagina(pagina):
+    if pagina.is_closed():
         return (
             "A aba do Chromium foi fechada antes de concluir o login. "
             "Não feche a janela enquanto o script estiver executando."
         )
 
     try:
-        texto = page.locator("body").inner_text(timeout=5000)[:2000]
+        texto_pagina = pagina.locator("body").inner_text(timeout=5000)[:2000]
     except Exception as erro:
-        texto = f"Não foi possível ler o conteúdo da página: {erro}"
+        texto_pagina = f"Não foi possível ler o conteúdo da página: {erro}"
 
     try:
-        page.screenshot(path="debug_pagina.png", full_page=True)
+        pagina.screenshot(path="debug_pagina.png", full_page=True)
     except Exception:
         pass
 
     try:
-        url = page.url
+        endereco_atual = pagina.url
     except Exception as erro:
-        url = f"indisponível ({type(erro).__name__})"
+        endereco_atual = f"indisponível ({type(erro).__name__})"
 
     try:
-        titulo = page.title()
+        titulo_pagina = pagina.title()
     except Exception as erro:
-        titulo = f"indisponível ({type(erro).__name__})"
+        titulo_pagina = f"indisponível ({type(erro).__name__})"
 
-    return f"URL: {url}\nTítulo: {titulo}\nConteúdo: {texto}"
+    return f"URL: {endereco_atual}\nTítulo: {titulo_pagina}\nConteúdo: {texto_pagina}"
 
 
-def _diagnostico_campos(page):
-    linhas = []
-    for indice, frame in enumerate(page.frames):
+def _diagnostico_campos_formulario(pagina):
+    linhas_diagnostico = []
+    for indice_quadro, quadro in enumerate(pagina.frames):
         try:
-            inputs = frame.locator("input").all()
-            for input_element in inputs:
-                detalhes = input_element.evaluate(
+            campos_input = quadro.locator("input").all()
+            for campo_input in campos_input:
+                detalhes_campo = campo_input.evaluate(
                     "element => ({"
                     "type: element.type, id: element.id, name: element.name, "
                     "placeholder: element.placeholder, visible: !!(element.offsetWidth || element.offsetHeight)"
                     "})"
                 )
-                linhas.append(f"frame {indice} {frame.url}: {detalhes}")
+                linhas_diagnostico.append(f"frame {indice_quadro} {quadro.url}: {detalhes_campo}")
         except Exception as erro:
-            linhas.append(f"frame {indice} {frame.url}: não foi possível inspecionar inputs ({type(erro).__name__})")
-    return "\n".join(linhas) if linhas else "Nenhum elemento <input> encontrado em qualquer frame."
-
-
-def _registrar_requisicao_login(requisicoes):
-    def registrar(request):
-        partes = urlsplit(request.url)
-        requisicoes.append((request.method.upper(), f"{partes.netloc}{partes.path}"))
-
-    return registrar
-
-
-def _registrar_resposta_login(respostas):
-    def registrar(response):
-        partes = urlsplit(response.url)
-        respostas.append((response.status, f"{partes.netloc}{partes.path}"))
-
-    return registrar
-
-
-def abrir_lista(page):
-    email = os.getenv("SECRAN_EMAIL")
-    senha = os.getenv("SECRAN_PASSWORD")
-
-    if not email or not senha:
-        raise RuntimeError("Configure SECRAN_EMAIL e SECRAN_PASSWORD no arquivo .env")
-
-    page.goto(
-        LISTA_URL,
-        wait_until="domcontentloaded",
-        timeout=TIMEOUT_LOGIN,
+            linhas_diagnostico.append(
+                f"frame {indice_quadro} {quadro.url}: não foi possível inspecionar inputs ({type(erro).__name__})"
+            )
+    return (
+        "\n".join(linhas_diagnostico) if linhas_diagnostico else "Nenhum elemento <input> encontrado em qualquer frame."
     )
 
-    frame_login = campo_email = campo_senha = None
-    limite_busca = time.monotonic() + 10
-    while time.monotonic() < limite_busca:
-        frame_login, campo_email, campo_senha = _localizar_formulario_login(page)
-        if frame_login:
+
+def _registrar_requisicao_acesso(requisicoes_registradas):
+    def registrar_requisicao(requisicao):
+        partes_url = urlsplit(requisicao.url)
+        requisicoes_registradas.append((requisicao.method.upper(), f"{partes_url.netloc}{partes_url.path}"))
+
+    return registrar_requisicao
+
+
+def _registrar_resposta_acesso(respostas_registradas):
+    def registrar_resposta(resposta):
+        partes_url = urlsplit(resposta.url)
+        respostas_registradas.append((resposta.status, f"{partes_url.netloc}{partes_url.path}"))
+
+    return registrar_resposta
+
+
+def abrir_listagem_tickets(pagina):
+    email_acesso = os.getenv("SECRAN_EMAIL")
+    senha_acesso = os.getenv("SECRAN_PASSWORD")
+
+    if not email_acesso or not senha_acesso:
+        raise RuntimeError("Configure SECRAN_EMAIL e SECRAN_PASSWORD no arquivo .env")
+
+    pagina.goto(
+        URL_LISTAGEM_TICKETS,
+        wait_until="domcontentloaded",
+        timeout=TEMPO_LIMITE_LOGIN_MS,
+    )
+
+    quadro_login = campo_email = campo_senha = None
+    prazo_busca_formulario = time.monotonic() + 10
+    while time.monotonic() < prazo_busca_formulario:
+        quadro_login, campo_email, campo_senha = _localizar_formulario_acesso(pagina)
+        if quadro_login:
             break
-        page.wait_for_timeout(250)
+        pagina.wait_for_timeout(250)
 
     respostas_login = []
     requisicoes_login = []
 
-    if frame_login:
-        print(f"Login: campos encontrados no frame {frame_login.url!r}; preenchendo...")
-        campo_email.fill(email)
-        campo_senha.fill(senha)
-        email_preenchido = campo_email.input_value() == email
-        senha_preenchida = campo_senha.input_value() == senha
+    if quadro_login:
+        print(f"Login: campos encontrados no frame {quadro_login.url!r}; preenchendo...")
+        campo_email.fill(email_acesso)
+        campo_senha.fill(senha_acesso)
+        email_preenchido = campo_email.input_value() == email_acesso
+        senha_preenchida = campo_senha.input_value() == senha_acesso
         if not email_preenchido or not senha_preenchida:
             raise RuntimeError(
                 "Falha ao preencher o formulário: "
                 f"email conferido={email_preenchido}, senha conferida={senha_preenchida}."
             )
 
-        botao_entrar = _primeiro_visivel(
-            frame_login,
+        botao_entrar = _primeiro_elemento_visivel(
+            quadro_login,
             (
                 "button:has-text('Entrar')",
                 "[role='button']:has-text('Entrar')",
@@ -165,44 +169,45 @@ def abrir_lista(page):
             ),
         )
         if botao_entrar:
-            page.on("request", _registrar_requisicao_login(requisicoes_login))
-            page.on("response", _registrar_resposta_login(respostas_login))
+            pagina.on("request", _registrar_requisicao_acesso(requisicoes_login))
+            pagina.on("response", _registrar_resposta_acesso(respostas_login))
             print("Login: valores preenchidos e conferidos; clicando em Entrar...")
             botao_entrar.click()
         else:
             raise RuntimeError(
-                "Campos encontrados e preenchidos, mas o botão Entrar não foi localizado.\n" + _diagnostico(page)
+                "Campos encontrados e preenchidos, mas o botão Entrar não foi localizado.\n"
+                + _diagnostico_pagina(pagina)
             )
     else:
         raise RuntimeError(
             "A tela mostra login, mas os campos não foram localizados; nenhum dado foi enviado.\n"
-            + _diagnostico(page)
+            + _diagnostico_pagina(pagina)
             + "\nInputs encontrados (sem valores):\n"
-            + _diagnostico_campos(page)
+            + _diagnostico_campos_formulario(pagina)
         )
 
-    prazo = time.monotonic() + max(TIMEOUT, TIMEOUT_LOGIN) / 1000
-    while time.monotonic() < prazo:
-        if page.is_closed():
+    prazo_login = time.monotonic() + max(TEMPO_LIMITE_MS, TEMPO_LIMITE_LOGIN_MS) / 1000
+    while time.monotonic() < prazo_login:
+        if pagina.is_closed():
             raise RuntimeError(
                 "A aba fechou enquanto aguardava a resposta do login. "
                 "O site não confirmou que a autenticação foi concluída."
             )
-        if page.locator("div.ant-table").count() and page.locator("div.ant-table").first.is_visible():
+        if pagina.locator("div.ant-table").count() and pagina.locator("div.ant-table").first.is_visible():
             print("Login: tabela de tickets detectada.")
             break
-        page.wait_for_timeout(250)
+        pagina.wait_for_timeout(250)
     else:
-        requisicoes = ", ".join(f"{metodo} {endpoint}" for metodo, endpoint in requisicoes_login)
-        respostas = ", ".join(f"HTTP {status} {endpoint}" for status, endpoint in respostas_login)
+        requisicoes_formatadas = ", ".join(f"{metodo} {endpoint}" for metodo, endpoint in requisicoes_login)
+        respostas_formatadas = ", ".join(f"HTTP {status} {endpoint}" for status, endpoint in respostas_login)
         detalhe_envio = (
-            f"Requisições: {requisicoes or 'nenhuma (nenhum clique/envio confirmado)'}; "
-            f"respostas: {respostas or 'nenhuma resposta observada'}"
+            f"Requisições: {requisicoes_formatadas or 'nenhuma (nenhum clique/envio confirmado)'}; "
+            f"respostas: {respostas_formatadas or 'nenhuma resposta observada'}"
         )
         raise RuntimeError(
             "O site continuou na tela de login. "
             "Verifique se apareceu uma mensagem de credenciais inválidas ou CAPTCHA.\n"
-            f"Envio: {detalhe_envio}\n" + _diagnostico(page)
+            f"Envio: {detalhe_envio}\n" + _diagnostico_pagina(pagina)
         )
 
-    print("Login concluído. URL atual:", page.url)
+    print("Login concluído. URL atual:", pagina.url)

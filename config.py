@@ -1,12 +1,12 @@
 from pathlib import Path
 
-BASE_URL = "https://secran.digital"
-LISTA_URL = f"{BASE_URL}/admin/cards/tickets"
+URL_BASE = "https://secran.digital"
+URL_LISTAGEM_TICKETS = f"{URL_BASE}/admin/cards/tickets"
 
-LINK_TICKET = "td.ant-table-cell a[href*='/cards/view/']"
-LINHAS_DESCRICAO = "tr.ant-descriptions-row"
-COMENTARIO = "div.ant-comment"
+SELETOR_LINK_TICKET = "td.ant-table-cell a[href*='/cards/view/']"
+SELETOR_LINHAS_DESCRICAO = "tr.ant-descriptions-row"
+SELETOR_COMENTARIO = "div.ant-comment"
 
-ARQUIVO_DADOS = Path("dados/dados_tickets.json")
-TIMEOUT = 15000
-TIMEOUT_LOGIN = 30000
+ARQUIVO_TICKETS = Path("dados/dados_tickets.json")
+TEMPO_LIMITE_MS = 15000
+TEMPO_LIMITE_LOGIN_MS = 30000

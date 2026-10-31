@@ -1,27 +1,31 @@
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
-from browser import abrir_lista
-from storage import carregar, salvar
+from browser import abrir_listagem_tickets
+from storage import carregar_tickets, salvar_tickets
 from tickets import coletar_urls_tickets, extrair_ticket
 
 
 def main():
     load_dotenv()
 
-    dados = carregar()
-    salvos = {str(item["ticket_id"]) for item in dados if item.get("ticket_id")}
+    tickets_registrados = carregar_tickets()
+    ids_tickets_salvos = {
+        str(registro_ticket["ticket_id"])
+        for registro_ticket in tickets_registrados
+        if registro_ticket.get("ticket_id")
+    }
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        context = browser.new_context()
-        lista = context.new_page()
+    with sync_playwright() as playwright:
+        navegador = playwright.chromium.launch(headless=False)
+        contexto_navegador = navegador.new_context()
+        pagina_listagem = contexto_navegador.new_page()
 
         try:
             try:
-                abrir_lista(lista)
-            except RuntimeError as exc:
-                print(exc)
+                abrir_listagem_tickets(pagina_listagem)
+            except RuntimeError as erro:
+                print(erro)
                 input(
                     "A janela do navegador ficará aberta para inspeção. "
                     "Depois de verificar a mensagem do site, pressione ENTER para fechar... "
@@ -30,37 +34,46 @@ def main():
 
             input("Aplique os filtros desejados na tabela e pressione ENTER para continuar... ")
 
-            tickets = coletar_urls_tickets(lista)
-            print(f"Tickets encontrados na página/listagem atual: {len(tickets)}")
+            tickets_encontrados = coletar_urls_tickets(pagina_listagem)
+            print(f"Tickets encontrados na página/listagem atual: {len(tickets_encontrados)}")
 
-            page = context.new_page()
+            pagina_ticket = contexto_navegador.new_page()
             try:
-                for indice, (ticket_id, url) in enumerate(tickets, start=1):
-                    if ticket_id in salvos:
-                        print(f"[{indice}/{len(tickets)}] Ticket {ticket_id}: já salvo, ignorando.")
+                for posicao_ticket, (ticket_id, url_ticket) in enumerate(tickets_encontrados, start=1):
+                    if ticket_id in ids_tickets_salvos:
+                        print(
+                            f"[{posicao_ticket}/{len(tickets_encontrados)}] "
+                            f"Ticket {ticket_id}: já salvo, ignorando."
+                        )
                         continue
 
-                    print(f"[{indice}/{len(tickets)}] Processando ticket {ticket_id}...")
+                    print(
+                        f"[{posicao_ticket}/{len(tickets_encontrados)}] "
+                        f"Processando ticket {ticket_id}..."
+                    )
                     try:
-                        page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                        info = extrair_ticket(page, ticket_id)
+                        pagina_ticket.goto(url_ticket, wait_until="domcontentloaded", timeout=30000)
+                        dados_ticket = extrair_ticket(pagina_ticket, ticket_id)
 
-                        dados.append(info)
-                        salvar(dados)
-                        salvos.add(ticket_id)
+                        tickets_registrados.append(dados_ticket)
+                        salvar_tickets(tickets_registrados)
+                        ids_tickets_salvos.add(ticket_id)
 
-                        print(f"  Salvo: {len(info['comentarios'])} comentários; assunto: {info['assunto'][:70]}")
-                    except Exception as exc:
-                        print(f"  ERRO no ticket {ticket_id}: {type(exc).__name__}: {exc}")
+                        print(
+                            f"  Salvo: {len(dados_ticket['comentarios'])} comentários; "
+                            f"assunto: {dados_ticket['assunto'][:70]}"
+                        )
+                    except Exception as erro:
+                        print(f"  ERRO no ticket {ticket_id}: {type(erro).__name__}: {erro}")
             finally:
-                page.close()
+                pagina_ticket.close()
         finally:
             try:
-                browser.close()
-            except Exception as exc:
-                print(f"Aviso ao encerrar Chromium: {type(exc).__name__}: {exc}")
+                navegador.close()
+            except Exception as erro:
+                print(f"Aviso ao encerrar Chromium: {type(erro).__name__}: {erro}")
 
-    print(f"Concluído: {len(dados)} tickets registrados.")
+    print(f"Concluído: {len(tickets_registrados)} tickets registrados.")
 
 
 if __name__ == "__main__":
